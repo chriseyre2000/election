@@ -1,0 +1,75 @@
+# Pull data
+
+```elixir
+Mix.install([
+  {:httpoison, "~> 2.2"},
+  {:jason, "~> 1.4"}
+])
+```
+
+## Section
+
+```elixir
+Agent.start_link(fn -> [] end, name: :MP)
+```
+
+```elixir
+defmodule MP do
+  def get_mp() do
+    Agent.get(:MP, & &1)
+  end
+
+  def put_mp(data) do
+    Agent.update(:MP, fn current -> current ++ [data] end)
+  end
+end
+```
+
+```elixir
+MP.get_mp()
+```
+
+```elixir
+url = "https://members-api.parliament.uk/api//Members/4932/Synopsis"
+{ok, %{body: body}} = HTTPoison.get(url)
+```
+
+OK There are 650 MPs to fetch data for
+
+```elixir
+defmodule ConstituencyDetails do
+  def get_mps(skip \\ 0, take \\ 10) do
+    url =
+      "https://members-api.parliament.uk/api/Location/Constituency/Search?skip=#{skip}&take=#{take}"
+
+    {:ok, %{body: body}} = HTTPoison.get(url)
+    %{"items" => list} = body |> Jason.decode!()
+
+    list
+    |> Enum.map(fn data -> data["value"] end)
+    |> Enum.map(fn %{
+                     "id" => id,
+                     "name" => constituency,
+                     "currentRepresentation" => %{
+                       "member" => %{
+                         "value" => %{
+                           "id" => mp_id,
+                           "nameFullTitle" => name,
+                           "latestParty" => %{"name" => party}
+                         }
+                       }
+                     }
+                   } ->
+      %{con_id: id, constituency: constituency, mp_id: mp_id, name: name, party: party}
+    end)
+  end
+end
+```
+
+```elixir
+mps = 0..64 |> Enum.flat_map(fn n -> ConstituencyDetails.get_mps(n * 10) end)
+```
+
+```elixir
+mps |> Enum.count()
+```
